@@ -12,6 +12,13 @@ note: Single source of design truth. Markdown, Git-tracked. CLAUDE.md is the sho
 > Project folder: `C:\Users\amole\Desktop\SecondBrainAgent`. Package scope: `@mneme/*`.
 > Folder name and codename can differ freely; rename later if desired.
 
+> **Deployment scope (owner decision, 2026-06-21):** the primary target is a
+> **local single-user Windows PC** — the Electron client + a local Core over stdio.
+> Remote clients and server hosting (§2 HTTP/WS Auth Gateway, §8 Phase 4) are
+> **deferred**, and on a single-user own-machine setup ingest isolation is
+> low-stakes. This is an additive scope note only; the locked invariants (§1) are
+> unchanged.
+
 ---
 
 ## 0. Identity (center sentence)
