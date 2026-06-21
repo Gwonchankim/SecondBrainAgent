@@ -1,0 +1,9 @@
+export * from "./core";
+export * from "./policies";
+export * from "./ingest";
+export { ClaudeCodeAdapter } from "./adapters/claude-code-adapter";
+export { CodexAdapter } from "./adapters/codex-adapter";
+export { StubAdapter } from "./adapters/stub-adapter";
+export { probeCli } from "./adapters/cli-probe";
+export { captureChanges } from "./adapters/worktree-capture";
+export type { CapturedRun } from "./adapters/worktree-capture";

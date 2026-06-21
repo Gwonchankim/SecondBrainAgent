@@ -1,0 +1,8 @@
+{
+  "name": "@mneme/cache",
+  "version": "0.1.0",
+  "description": "Derived-cache rebuild contract. memory-map / graph-index / search-index are rebuildable derivations — wiping .cache and rebuilding must always succeed (invariant 3).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json" }
+}

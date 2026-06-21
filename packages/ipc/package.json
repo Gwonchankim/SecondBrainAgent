@@ -1,0 +1,8 @@
+{
+  "name": "@mneme/ipc",
+  "version": "0.1.0",
+  "description": "UI-independent Core API + event stream, over a swappable transport. MVP transport: line-delimited JSON-RPC on stdio. Phase 4 swaps to HTTP/WS without changing CoreApi.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json" }
+}

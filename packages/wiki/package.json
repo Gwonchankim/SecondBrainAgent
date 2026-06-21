@@ -1,0 +1,15 @@
+{
+  "name": "@mneme/wiki",
+  "version": "0.1.0",
+  "description": "Single source of truth: Markdown Wiki + raw sources in Git. Implements the proposal=branch model and the raw(immediate)/pages(proposed) truth-split.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "simple-git": "^3.24.0",
+    "zod": "^3.23.0"
+  }
+}

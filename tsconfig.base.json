@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "moduleResolution": "node10",
+    "lib": ["ES2021"],
+    "declaration": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@mneme/provider": ["./packages/provider/src"],
+      "@mneme/ipc": ["./packages/ipc/src"],
+      "@mneme/wiki": ["./packages/wiki/src"],
+      "@mneme/credential": ["./packages/credential/src"],
+      "@mneme/cache": ["./packages/cache/src"],
+      "@mneme/core": ["./packages/core/src"]
+    }
+  }
+}

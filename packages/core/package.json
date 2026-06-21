@@ -1,0 +1,16 @@
+{
+  "name": "@mneme/core",
+  "version": "0.1.0",
+  "description": "Headless Core. Owns identity, the self-improving loop, review gate, routing, budget, parallel policy. Implements CoreApi and serves it over stdio. Backends are plugged in as thin AgentProviders.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": { "mneme-core": "dist/bin.js" },
+  "scripts": { "build": "tsc -p tsconfig.json", "start": "node dist/bin.js" },
+  "dependencies": {
+    "@mneme/provider": "0.1.0",
+    "@mneme/ipc": "0.1.0",
+    "@mneme/wiki": "0.1.0",
+    "@mneme/credential": "0.1.0",
+    "@mneme/cache": "0.1.0"
+  }
+}

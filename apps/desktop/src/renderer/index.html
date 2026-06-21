@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Mneme</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+      header { padding: 8px 12px; border-bottom: 1px solid #ddd; font-weight: 600; }
+      #log { flex: 1; overflow: auto; padding: 12px; }
+      .msg { margin: 6px 0; }
+      .me { text-align: right; color: #185fa5; }
+      .ev { color: #777; font-size: 12px; }
+      footer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #ddd; }
+      input { flex: 1; padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <header>Mneme — chat shell (Phase 0)</header>
+    <div id="log"></div>
+    <footer>
+      <input id="text" placeholder="메시지 입력 (vault: personal)…" />
+      <button id="send">Send</button>
+    </footer>
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+# Derived caches are rebuildable — never tracked (invariant 3)
+.cache/
+# Local workspace data (vaults live here at runtime, each is its own git repo)
+.mneme-workspace/
