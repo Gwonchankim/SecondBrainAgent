@@ -37,9 +37,12 @@ async function main(): Promise<void> {
     }
   });
 
-  // Surface login state up front: authenticate() now ATTEMPTs a real `claude -p` run.
+  // Surface login state up front: authenticate() ATTEMPTs a real `claude -p` run,
+  // but caches it — a second call must NOT trigger another billed probe.
   const auth = await claude.authenticate({ mode: "delegated" });
+  await claude.authenticate({ mode: "delegated" }); // cached; no extra probe
   console.log("claude auth:", JSON.stringify(auth));
+  console.log("delegated auth probes this process:", claude.delegatedProbeCount, "(expect 1)");
 
   const root = path.join(os.tmpdir(), "mneme-ingest", "personal");
   await fs.rm(path.join(os.tmpdir(), "mneme-ingest"), { recursive: true, force: true });

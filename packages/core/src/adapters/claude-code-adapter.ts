@@ -3,7 +3,10 @@
 // authenticate(): the only reliable delegated login check is to ATTEMPT a real
 // minimal `claude -p` run and read its JSON is_error — a static file/cred probe
 // is a false negative on Windows (creds live in Credential Manager). ENOENT
-// (binary missing) is the sole hard "cannot run".
+// (binary missing) is the sole hard "cannot run". That probe is BILLED, and the
+// claude CLI exposes no non-billed status check (only doctor/mcp/setup-token), so
+// the result is cached for the process lifetime: we probe at most once (budget,
+// invariant 12).
 // runTask(): real headless run. Invokes `claude -p` inside an isolated detached
 // git worktree off the vault's HEAD (so the vault working tree is untouched),
 // then captures the file changes as a PROPOSAL. The Host commits, not us.
@@ -75,6 +78,17 @@ function runClaudeHeadless(
 export class ClaudeCodeAdapter implements AgentProvider {
   readonly id = "claude-code";
 
+  /** Memoized delegated probe; the probe is billed, so even concurrent callers
+   *  share ONE run for the process lifetime. */
+  private delegatedAuthProbe?: Promise<AuthStatus>;
+  /** Count of billed delegated probes actually run this process (proof it is <= 1). */
+  private probeCount = 0;
+
+  /** How many billed delegated probes ran this process (diagnostics / tests). */
+  get delegatedProbeCount(): number {
+    return this.probeCount;
+  }
+
   getCapabilities(): ProviderCapabilities {
     return {
       unattendedExecution: true,
@@ -94,14 +108,30 @@ export class ClaudeCodeAdapter implements AgentProvider {
         : { authenticated: false, mode: "api-key", loginHint: "set ANTHROPIC_API_KEY", message: "no API key available (env or CredentialStore ref)" };
     }
 
-    // delegated: the CLI owns the OAuth session. A static file/cred probe is a
-    // false negative on Windows (creds live in Credential Manager), so the only
-    // reliable check is a real minimal run. ENOENT is the sole hard failure.
-    const ver = await probeCli("claude", ["--version"]);
-    if (!ver.ran) {
-      return { authenticated: false, mode: "delegated", loginHint: "claude", message: "`claude` CLI not found on PATH" };
-    }
+    // delegated: a probe is a billed `claude -p` run, so memoize it and probe AT
+    // MOST ONCE per process (budget principle, invariant 12). Memoizing the PROMISE
+    // (not just the result) means concurrent callers also share the single probe.
+    if (!this.delegatedAuthProbe) this.delegatedAuthProbe = this.probeDelegated();
+    return this.delegatedAuthProbe;
+  }
+
+  /**
+   * One delegated liveness probe. ENOENT (binary missing) is the only hard
+   * "cannot run"; otherwise a minimal BILLED `claude -p` run whose is_error tells
+   * us login state. Counted + logged so we can prove it runs once per process.
+   * `protected` so tests can override it without a paid model call.
+   */
+  protected async probeDelegated(): Promise<AuthStatus> {
+    this.probeCount += 1;
+    // Wrap the ENTIRE body so this method can NEVER reject: a rejected promise
+    // would be memoized by authenticate() and poison delegated auth for the whole
+    // process. Every failure (incl. a broken stderr) becomes a negative AuthStatus.
     try {
+      process.stderr.write(`[claude-code] delegated auth probe run #${this.probeCount} (cached for process lifetime)\n`);
+      const ver = await probeCli("claude", ["--version"]);
+      if (!ver.ran) {
+        return { authenticated: false, mode: "delegated", loginHint: "claude", message: "`claude` CLI not found on PATH" };
+      }
       // Read-only liveness probe: only is_error matters, so use a non-editing
       // permission mode (no acceptEdits) — the probe must never write files.
       const probe = await runClaudeHeadless("Reply with exactly: OK", { maxTurns: 1, permissionMode: "default" })(os.tmpdir());
