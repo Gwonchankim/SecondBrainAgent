@@ -1,5 +1,6 @@
 node_modules/
 dist/
+*.tsbuildinfo
 *.log
 # Derived caches are rebuildable — never tracked (invariant 3)
 .cache/
