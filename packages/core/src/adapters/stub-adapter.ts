@@ -31,9 +31,10 @@ export class StubAdapter implements AgentProvider {
       `title: "Placeholder for ${input.runId}"`,
       "tags: []",
       "sources: []",
-      // Quote dates so YAML keeps them as strings (PageFrontmatterSchema wants string).
-      `created: "${today}"`,
-      `updated: "${today}"`,
+      // Unquoted on purpose: YAML parses these as Date objects, and the wiki
+      // frontmatter schema coerces Date -> "YYYY-MM-DD", so this still validates.
+      `created: ${today}`,
+      `updated: ${today}`,
       "vault: unknown",
       "---",
       "",

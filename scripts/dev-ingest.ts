@@ -28,9 +28,16 @@ async function main(): Promise<void> {
   const providers = new Map([["claude-code", claude]]);
   const core = new MnemeCore({ credentials, cache, providers, defaultProviderId: "claude-code" });
 
-  core.onEvent((e) => console.log("[event]", e.type, JSON.stringify(e)));
+  let costUsd = 0;
+  core.onEvent((e) => {
+    console.log("[event]", e.type, JSON.stringify(e));
+    if (e.type === "AgentEvent") {
+      const usage = (e.payload as { usage?: { costUsd?: number } } | undefined)?.usage;
+      if (typeof usage?.costUsd === "number") costUsd += usage.costUsd;
+    }
+  });
 
-  // Surface login state up front (informational; on Windows the probe is conservative).
+  // Surface login state up front: authenticate() now ATTEMPTs a real `claude -p` run.
   const auth = await claude.authenticate({ mode: "delegated" });
   console.log("claude auth:", JSON.stringify(auth));
 
@@ -58,11 +65,15 @@ async function main(): Promise<void> {
     }
 
     console.log("\n--- captured proposal:", inspected.branch, "---");
-    console.log(inspected.diff || "(empty diff - no page captured)");
 
-    const producedPage = /raw\/pages\/.+\.md/.test(inspected.diff);
+    console.log("\n--- generated page(s) (verbatim) ---");
+    for (const pg of inspected.pages) {
+      console.log(`\n# ${pg.path}\n${pg.content}`);
+    }
+
+    const producedPage = inspected.pages.length > 0;
     const valid = inspected.warnings.length === 0 && producedPage;
-    console.log("\n--- validation ---");
+    console.log("--- validation ---");
     if (inspected.warnings.length) {
       for (const w of inspected.warnings) console.log("  WARN:", w);
     }
@@ -70,6 +81,9 @@ async function main(): Promise<void> {
     if (!producedPage) {
       console.log("hint: no raw/pages/*.md was produced - ensure `claude` is on PATH and logged in (`claude` to log in).");
     }
+    console.log("\ntotal_cost_usd:", costUsd.toFixed(4));
+    console.log("\n--- proposal diff ---");
+    console.log(inspected.diff || "(empty)");
   } catch (e) {
     console.error("\ningest failed:", e instanceof Error ? e.message : String(e));
     console.error("hint: this script needs the `claude` CLI on PATH and a logged-in session.");

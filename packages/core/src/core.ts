@@ -23,7 +23,7 @@ import { Vault, WikiService, ProposalRecord } from "@mneme/wiki";
 import { CredentialStore } from "@mneme/credential";
 import { CacheManager } from "@mneme/cache";
 import { resolveReflect } from "./policies";
-import { buildIngestInstruction, validateProposedPages } from "./ingest";
+import { buildIngestInstruction, validateProposedPages, checkIngestPaths } from "./ingest";
 
 interface VaultEntry {
   info: VaultInfo;
@@ -123,7 +123,7 @@ export class MnemeCore implements CoreApi, CoreEventSource {
       vaultId: input.vault,
       sourceId: relPath,
     });
-    const proposalId = await this.makeProposal(input.vault, instruction);
+    const proposalId = await this.makeProposal(input.vault, instruction, { ingest: true });
     return { proposalId, rawCommit: commit };
   }
 
@@ -131,7 +131,7 @@ export class MnemeCore implements CoreApi, CoreEventSource {
     return { proposalId: await this.makeProposal(input.vault, input.instruction) };
   }
 
-  private async makeProposal(vaultId: VaultId, instruction: string): Promise<ProposalId> {
+  private async makeProposal(vaultId: VaultId, instruction: string, opts: { ingest?: boolean } = {}): Promise<ProposalId> {
     const v = this.vaultEntry(vaultId);
     const provider = this.provider();
     const caps = provider.getCapabilities();
@@ -145,11 +145,16 @@ export class MnemeCore implements CoreApi, CoreEventSource {
       instruction,
     });
 
-    // Validate any produced page(s) against the LOCKED frontmatter schema BEFORE
-    // creating the proposal. Invalid pages must never auto-commit (truth model).
+    // Host-side guards on the captured changes, run BEFORE the proposal is created.
+    // Neither trusts the model: frontmatter is validated against the LOCKED schema,
+    // and (for ingest) every change is checked against the raw/pages/ allowlist.
     const validation = validateProposedPages(result.proposedChanges);
-    const warnings = [...(result.warnings ?? []), ...validation.warnings];
-    this.push({ type: "AgentEvent", runId, payload: { summary: result.summary, usage: result.usage, validation } });
+    const pathGuard = opts.ingest
+      ? checkIngestPaths(result.proposedChanges)
+      : { ok: true, warnings: [] as string[], disallowed: [] as string[] };
+    const guardsOk = validation.ok && pathGuard.ok;
+    const warnings = [...(result.warnings ?? []), ...validation.warnings, ...pathGuard.warnings];
+    this.push({ type: "AgentEvent", runId, payload: { summary: result.summary, usage: result.usage, validation, pathGuard } });
 
     const proposalId = nextProposalId();
     const record = await v.wiki.createProposal(proposalId, result.proposedChanges, instruction);
@@ -157,13 +162,14 @@ export class MnemeCore implements CoreApi, CoreEventSource {
 
     this.push({ type: "DiffReady", proposalId, vault: vaultId });
 
-    // A proposal carrying an invalid page is forced to DRAFT: it waits for a human
-    // and is never auto-committed, regardless of the vault's reflect policy. This
-    // is an automation downgrade (invariant 10: downgrade only, never upgrade).
-    const effectiveReflect = validation.ok ? reflect : "draft";
-    if (!validation.ok && reflect === "auto") {
-      this.push({ type: "PolicyDowngraded", vault: vaultId, from: "auto", to: "draft", reason: "ingested page failed frontmatter validation" });
+    // A flagged proposal (invalid frontmatter or a disallowed path) is forced to
+    // DRAFT: it waits for a human and is never auto-committed, regardless of the
+    // vault's reflect policy. This is a guard signal, not a policy downgrade, so it
+    // emits ProposalFlagged (PolicyDowngraded stays reserved for invariant 10).
+    if (!guardsOk) {
+      this.push({ type: "ProposalFlagged", proposalId, vault: vaultId, warnings });
     }
+    const effectiveReflect = guardsOk ? reflect : "draft";
 
     if (effectiveReflect === "auto") {
       await this.approveChange({ proposalId });
@@ -220,11 +226,12 @@ export class MnemeCore implements CoreApi, CoreEventSource {
    * and any validation warnings. Used by dev scripts to surface what a backend
    * produced without widening the client-facing API surface.
    */
-  async inspectProposal(proposalId: ProposalId): Promise<{ branch: string; diff: string; warnings: string[] } | undefined> {
+  async inspectProposal(proposalId: ProposalId): Promise<{ branch: string; diff: string; warnings: string[]; pages: { path: string; content: string }[] } | undefined> {
     const entry = this.proposals.get(proposalId);
     if (!entry) return undefined;
     const v = this.vaultEntry(entry.vault);
     const diff = await v.wiki.diffProposal(entry.record);
-    return { branch: entry.record.branch, diff, warnings: entry.warnings ?? [] };
+    const pages = await v.wiki.readProposalPages(entry.record);
+    return { branch: entry.record.branch, diff, warnings: entry.warnings ?? [], pages };
   }
 }

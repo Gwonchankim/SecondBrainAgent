@@ -1,19 +1,22 @@
 // @mneme/core — ClaudeCodeAdapter (REAL thin executor)
 //
-// authenticate(): real CLI probe (delegated = CLI owns the OAuth session).
+// authenticate(): the only reliable delegated login check is to ATTEMPT a real
+// minimal `claude -p` run and read its JSON is_error — a static file/cred probe
+// is a false negative on Windows (creds live in Credential Manager). ENOENT
+// (binary missing) is the sole hard "cannot run".
 // runTask(): real headless run. Invokes `claude -p` inside an isolated detached
 // git worktree off the vault's HEAD (so the vault working tree is untouched),
 // then captures the file changes as a PROPOSAL. The Host commits, not us.
 //
 // Headless contract (per Claude Code docs):
-//   claude -p "<prompt>" --bare --output-format json --permission-mode acceptEdits
+//   claude -p "<prompt>" --output-format json --permission-mode acceptEdits
 //   JSON result includes total_cost_usd, result, session_id, is_error.
-//   --bare skips local hooks/skills/MCP/CLAUDE.md for reproducible scripted runs.
+// NOTE: we deliberately do NOT pass --bare. --bare suppresses the delegated OAuth
+// subscription session (it expects an env API key), so on a subscription login it
+// returns a false "Not logged in". Delegated auth = just invoke the logged-in CLI.
 
 import { execFile } from "node:child_process";
 import * as os from "node:os";
-import * as path from "node:path";
-import * as fs from "node:fs";
 import {
   AgentProvider,
   AgentRunResult,
@@ -35,15 +38,14 @@ interface ClaudeJson {
 
 function runClaudeHeadless(
   prompt: string,
-  opts: { model?: string; maxTurns?: number; timeoutMs?: number }
+  opts: { model?: string; maxTurns?: number; timeoutMs?: number; permissionMode?: string }
 ): (worktreeDir: string) => Promise<ClaudeJson> {
   return (worktreeDir: string) =>
     new Promise<ClaudeJson>((resolve, reject) => {
       const args = [
         "-p", prompt,
-        "--bare",
         "--output-format", "json",
-        "--permission-mode", "acceptEdits",
+        "--permission-mode", opts.permissionMode ?? "acceptEdits",
       ];
       if (opts.model) args.push("--model", opts.model);
       if (opts.maxTurns) args.push("--max-turns", String(opts.maxTurns));
@@ -92,20 +94,23 @@ export class ClaudeCodeAdapter implements AgentProvider {
         : { authenticated: false, mode: "api-key", loginHint: "set ANTHROPIC_API_KEY", message: "no API key available (env or CredentialStore ref)" };
     }
 
+    // delegated: the CLI owns the OAuth session. A static file/cred probe is a
+    // false negative on Windows (creds live in Credential Manager), so the only
+    // reliable check is a real minimal run. ENOENT is the sole hard failure.
     const ver = await probeCli("claude", ["--version"]);
     if (!ver.ran) {
       return { authenticated: false, mode: "delegated", loginHint: "claude", message: "`claude` CLI not found on PATH" };
     }
-    if (process.platform === "win32") {
-      // Windows stores Claude creds in Credential Manager (not file-probeable here).
-      return { authenticated: false, mode: "delegated", loginHint: "claude", message: "`claude` found; confirm login interactively (Windows Credential Manager-based)" };
+    try {
+      // Read-only liveness probe: only is_error matters, so use a non-editing
+      // permission mode (no acceptEdits) — the probe must never write files.
+      const probe = await runClaudeHeadless("Reply with exactly: OK", { maxTurns: 1, permissionMode: "default" })(os.tmpdir());
+      return probe.is_error
+        ? { authenticated: false, mode: "delegated", loginHint: "claude", message: probe.result ?? "claude reported an error (not logged in?)" }
+        : { authenticated: true, mode: "delegated", account: "subscription", message: "claude -p probe run succeeded" };
+    } catch (e) {
+      return { authenticated: false, mode: "delegated", loginHint: "claude", message: e instanceof Error ? e.message : String(e) };
     }
-    const credFile = path.join(os.homedir(), ".claude", ".credentials.json");
-    let session = false;
-    try { session = fs.existsSync(credFile); } catch { session = false; }
-    return session
-      ? { authenticated: true, mode: "delegated", account: "subscription", message: "claude session present (verify with `claude` /status)" }
-      : { authenticated: false, mode: "delegated", loginHint: "claude", message: "`claude` found but no local session — run `claude` to log in" };
   }
 
   async runTask(input: AgentTask): Promise<AgentRunResult> {

@@ -41,7 +41,10 @@ npx ts-node scripts/dev-auth.ts   # runs the REAL authenticate() probe for both 
 
 ## Real headless run + diff capture
 `ClaudeCodeAdapter.runTask()` is a real headless run: it invokes
-`claude -p "<prompt>" --bare --output-format json --permission-mode acceptEdits`.
+`claude -p "<prompt>" --output-format json --permission-mode acceptEdits`.
+(No `--bare`: that flag suppresses the delegated OAuth subscription session, so a
+subscription login would falsely report "Not logged in". `authenticate()` likewise
+ATTEMPTs a real minimal run rather than probing files — the reliable check on Windows.)
 
 The constraint that drives the design: `claude -p` physically edits files in the
 working tree, but a provider must only ever return a *proposal* (invariant 6).
@@ -66,17 +69,22 @@ then page integration runs as a gated proposal. The **Host** builds the instruct
 that drives the backend — it injects the frontmatter schema, the raw source id, and
 the vault id, and tells the backend to write exactly one page under `raw/pages/`
 (`packages/core/src/ingest/instruction.ts`). The adapter stays thin: it only runs
-the prompt. After capture, the Host validates the produced page against
-`PageFrontmatterSchema` (`packages/core/src/ingest/validate.ts`); an invalid page is
-forced to draft and never auto-committed.
+the prompt. After capture, the Host runs two guards that do NOT trust the model:
+frontmatter validation against `PageFrontmatterSchema`
+(`packages/core/src/ingest/validate.ts`) and a `raw/pages/` path allowlist
+(`packages/core/src/ingest/paths.ts`). A page that fails either is forced to draft,
+never auto-committed, and surfaced via a `ProposalFlagged` event. The frontmatter
+schema coerces YAML dates to `"YYYY-MM-DD"` strings, so an unquoted date from the
+backend still validates (`npm run dev:frontmatter` proves this).
 
 ```bash
-npm run dev:ingest   # real claude -p ingest -> schema-validated page, delivered as a proposal
+npm run dev:ingest        # real claude -p ingest -> schema-validated page, delivered as a proposal
+npm run dev:frontmatter   # proves unquoted-date frontmatter coerces + validates
 ```
 
 `dev:ingest` needs the `claude` CLI on PATH and a logged-in session; it runs in
 `reflect: review` so the page lands as a proposal (not auto-committed) and prints the
-captured diff + validation verdict.
+generated page, validation verdict, total_cost_usd, and diff.
 
 ## Dev
 

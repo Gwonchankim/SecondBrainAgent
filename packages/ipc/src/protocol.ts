@@ -72,6 +72,9 @@ export type CoreEvent =
   | { type: "AgentEvent"; runId: RunId; payload: unknown }
   | { type: "DiffReady"; proposalId: ProposalId; vault: VaultId }
   | { type: "ApprovalRequired"; proposalId: ProposalId; vault: VaultId }
+  // A guard (frontmatter validation or path allowlist) flagged the proposal, forcing
+  // it to draft. Distinct from PolicyDowngraded, which is the invariant-10 ladder.
+  | { type: "ProposalFlagged"; proposalId: ProposalId; vault: VaultId; warnings: string[] }
   | { type: "WikiCommitted"; vault: VaultId; commit: string }
   | { type: "IndexRebuilt"; vault: VaultId; derivations: string[] }
   | { type: "BudgetLimitReached"; vault: VaultId; scope: "run" | "vault-daily" | "vault-monthly" | "global-monthly" }

@@ -8,6 +8,7 @@
 
 import { parsePage } from "@mneme/wiki";
 import type { ProposedFileChange } from "@mneme/provider";
+import { hasPathTraversal } from "./paths";
 
 /** Content pages live under raw/pages/*.md (slashes normalized for win32). */
 const PAGE_RE = /^raw\/pages\/.+\.md$/;
@@ -32,7 +33,8 @@ export function validateProposedPages(changes: ProposedFileChange[]): IngestVali
   for (const c of changes) {
     if (c.op === "delete") continue;
     const rel = c.path.replace(/\\/g, "/");
-    if (!PAGE_RE.test(rel)) continue;
+    // Skip traversal paths: the path guard rejects them; never treat one as a page.
+    if (!PAGE_RE.test(rel) || hasPathTraversal(rel)) continue;
 
     try {
       parsePage(c.content ?? "");

@@ -4,14 +4,32 @@
 import { z } from "zod";
 import matter from "gray-matter";
 
+// YAML auto-parses an unquoted `2026-06-21` into a JS Date. Coerce ONLY a pure
+// date-only value (parsed as UTC midnight) back to its "YYYY-MM-DD" string before
+// validation, so quoted strings and unquoted date-only YAML both satisfy the
+// (unchanged) string contract. A Date carrying a time/offset is NOT a YYYY-MM-DD
+// value -> leave it for z.string() to REJECT, rather than silently truncating it to
+// a UTC day that can differ by one from the author's wall-clock day.
+const DateString = z.preprocess((v) => {
+  if (v instanceof Date) {
+    const dateOnly =
+      v.getUTCHours() === 0 &&
+      v.getUTCMinutes() === 0 &&
+      v.getUTCSeconds() === 0 &&
+      v.getUTCMilliseconds() === 0;
+    return dateOnly ? v.toISOString().slice(0, 10) : v;
+  }
+  return v;
+}, z.string());
+
 export const PageFrontmatterSchema = z.object({
   type: z.enum(["topic", "entity", "synthesis", "source-summary"]),
   title: z.string().min(1),
   tags: z.array(z.string()).default([]),
   /** raw source-ids this page is grounded in (drives the graph + provenance). */
   sources: z.array(z.string()).default([]),
-  created: z.string(), // YYYY-MM-DD
-  updated: z.string(), // YYYY-MM-DD
+  created: DateString, // YYYY-MM-DD (Date coerced to string)
+  updated: DateString, // YYYY-MM-DD (Date coerced to string)
   vault: z.string(),
 });
 

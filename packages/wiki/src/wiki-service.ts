@@ -78,6 +78,24 @@ export class WikiService {
     return this.git.diff([`${p.baseCommit}..${p.branch}`]);
   }
 
+  /** Content of each raw/pages/ file as it exists on the proposal branch. */
+  async readProposalPages(p: ProposalRecord): Promise<{ path: string; content: string }[]> {
+    const names = (await this.git.raw(["diff", "--name-only", `${p.baseCommit}..${p.branch}`])).trim();
+    if (!names) return [];
+    const out: { path: string; content: string }[] = [];
+    for (const rel of names.split("\n").map((s) => s.trim()).filter(Boolean)) {
+      const norm = rel.replace(/\\/g, "/");
+      // Only real raw/pages/ files; reject '.'/'..' traversal segments.
+      if (!/^raw\/pages\/.+\.md$/.test(norm) || norm.split("/").some((s) => s === "." || s === "..")) continue;
+      try {
+        out.push({ path: rel, content: await this.git.show([`${p.branch}:${rel}`]) });
+      } catch {
+        // File not present on the branch (e.g. a deletion) — nothing to read.
+      }
+    }
+    return out;
+  }
+
   /**
    * Approve under the concurrency model. If main has moved since baseCommit,
    * attempt a rebase; a conflict means the proposal is stale -> regenerate.

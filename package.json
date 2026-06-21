@@ -12,7 +12,8 @@
     "dev:init": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-init.ts",
     "dev:auth": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-auth.ts",
     "dev:capture": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-capture.ts",
-    "dev:ingest": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-ingest.ts"
+    "dev:ingest": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-ingest.ts",
+    "dev:frontmatter": "node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/dev-frontmatter.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
