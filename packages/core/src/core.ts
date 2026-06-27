@@ -118,12 +118,17 @@ export class MnemeCore implements CoreApi, CoreEventSource {
     // 2) page integration = PROPOSED change through the gate.
     // The HOST builds the instruction (schema + context injected); the adapter
     // stays thin and only runs it. The raw rel path doubles as the provenance
-    // source-id the produced page must cite.
+    // source-id the produced page must cite. The existing-pages map is derived
+    // fresh from durable truth (raw/pages/) so the backend links to real pages by
+    // [[slug]] rather than duplicating them; deriving (not loading .cache) keeps
+    // ingest independent of any non-rebuildable cache (invariant 3).
+    const memoryMap = await deriveMemoryMap(input.vault, v.info.path);
     const instruction = buildIngestInstruction({
       rawRelPath: relPath,
       rawContent: input.value,
       vaultId: input.vault,
       sourceId: relPath,
+      memoryMap,
     });
     const proposalId = await this.makeProposal(input.vault, instruction, { ingest: true });
     return { proposalId, rawCommit: commit };

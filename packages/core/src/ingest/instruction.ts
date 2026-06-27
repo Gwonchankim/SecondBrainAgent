@@ -10,6 +10,9 @@
 // page against that schema after the run (see ./validate); this prompt just gives
 // the backend the best chance of producing a conforming page on the first pass.
 
+import { toContextSummary } from "../memory";
+import type { MemoryMap } from "../memory";
+
 export interface IngestInstructionInput {
   /** Path of the immutable raw source, relative to the vault's raw/ dir. */
   rawRelPath: string;
@@ -19,6 +22,31 @@ export interface IngestInstructionInput {
   vaultId: string;
   /** Stable provenance id for the raw source; goes into frontmatter `sources`. */
   sourceId: string;
+  /**
+   * The vault's existing-pages map (derived from durable truth). Injected so the
+   * backend links to real pages by their exact [[slug]] instead of duplicating
+   * them. Omitted or empty (fresh vault) => no block is injected (no-op).
+   */
+  memoryMap?: MemoryMap;
+}
+
+/**
+ * The "existing pages, link to these" context block, or [] when the vault has no
+ * pages yet (fresh vault: inject nothing, no noise). Host-owned phrasing.
+ */
+function existingPagesBlock(memoryMap?: MemoryMap): string[] {
+  if (!memoryMap || memoryMap.nodes.length === 0) return [];
+  return [
+    "## Existing pages in this vault (link to these; do NOT duplicate them)",
+    toContextSummary(memoryMap),
+    "",
+    "If this source is mostly about a topic that already has a page above, do not",
+    "write a second page on that same topic. Always create exactly ONE new page for",
+    "THIS source, but wherever it touches an existing topic, reference that page by",
+    "its [[slug]] (exactly as listed above) so the vault stays connected instead of",
+    "accumulating duplicates.",
+    "",
+  ];
 }
 
 /**
@@ -27,7 +55,7 @@ export interface IngestInstructionInput {
  * paths below are vault-relative.
  */
 export function buildIngestInstruction(input: IngestInstructionInput): string {
-  const { rawRelPath, rawContent, vaultId, sourceId } = input;
+  const { rawRelPath, rawContent, vaultId, sourceId, memoryMap } = input;
   return [
     "You are integrating a new raw source into a personal knowledge vault (a Git repo).",
     "Goal: turn the raw source into ONE well-structured Markdown knowledge page.",
@@ -40,6 +68,7 @@ export function buildIngestInstruction(input: IngestInstructionInput): string {
     rawContent,
     "RAW_SOURCE",
     "",
+    ...existingPagesBlock(memoryMap),
     "## Write exactly one page",
     "Create ONE new file at: raw/pages/<slug>.md",
     "where <slug> is a short kebab-case slug derived from the page title",
