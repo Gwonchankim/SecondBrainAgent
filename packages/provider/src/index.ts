@@ -99,6 +99,37 @@ export interface AgentRunResult {
   error?: string;
 }
 
+/**
+ * A READ-ONLY query task: answer a question from context the Host injects inline.
+ * Deliberately minimal — there is NO `workspace` and NO permission/edit field, so a
+ * query is read-only BY TYPE: the provider is never given the vault path and has no
+ * knob to request file-editing permission. The adapter runs it in a non-editing,
+ * non-vault context internally; that is not configurable here.
+ */
+export interface QueryTask {
+  runId: string;
+  /** Host-assembled prompt: the question + the selected pages' content inline. */
+  instruction: string;
+  /** Cost/time hints only. No permission or workspace fields by design. */
+  options?: {
+    maxCostUsd?: number;
+    timeoutMs?: number;
+  };
+}
+
+/**
+ * The ONLY shape a query may return. Note: NO `proposedChanges` — a query cannot
+ * carry a file change, so it structurally cannot feed the proposal/commit path.
+ */
+export interface QueryResult {
+  runId: string;
+  status: "ok" | "error" | "cancelled";
+  /** The synthesized natural-language answer (cites used pages by [[slug]]). */
+  answer: string;
+  usage: RunUsage;
+  error?: string;
+}
+
 /** Incremental events for the Host event stream. */
 export type AgentEvent =
   | { type: "agent.started"; runId: string }
@@ -113,6 +144,14 @@ export interface AgentProvider {
   getCapabilities(): ProviderCapabilities;
   authenticate(input: AuthInput): Promise<AuthStatus>;
   runTask(input: AgentTask): Promise<AgentRunResult>;
+  /**
+   * Optional READ-ONLY execution: answer a question from inline context and return
+   * text only. Never edits files, never returns proposedChanges. A backend that can
+   * answer queries implements this; one that cannot simply omits it (the Host then
+   * reports it cannot answer queries). This is still a thin executor — it returns an
+   * answer, never a proposal or commit — so it stays within the firewall.
+   */
+  runQuery?(input: QueryTask): Promise<QueryResult>;
   /** Optional streaming variant. Presence implies capabilities.streaming. */
   streamTask?(input: AgentTask): AsyncIterable<AgentEvent>;
   cancelRun(runId: string): Promise<void>;

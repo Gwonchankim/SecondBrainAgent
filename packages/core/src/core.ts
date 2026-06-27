@@ -19,13 +19,15 @@ import {
   VaultPolicy,
 } from "@mneme/ipc";
 import { AgentProvider } from "@mneme/provider";
-import { Vault, WikiService, ProposalRecord } from "@mneme/wiki";
+import { Vault, WikiService, ProposalRecord, extractWikilinks } from "@mneme/wiki";
 import { CredentialStore } from "@mneme/credential";
 import { CacheManager } from "@mneme/cache";
 import { resolveReflect } from "./policies";
 import { buildIngestInstruction, validateProposedPages, checkIngestPaths } from "./ingest";
-import { deriveMemoryMap } from "./memory";
+import { deriveMemoryMap, readPagesDir, buildMemoryMap } from "./memory";
 import type { MemoryMap } from "./memory";
+import { routePages, buildQueryInstruction, NOT_IN_VAULT } from "./query";
+import type { QueryOutcome } from "./query";
 
 interface VaultEntry {
   info: VaultInfo;
@@ -104,8 +106,67 @@ export class MnemeCore implements CoreApi, CoreEventSource {
   async sendMessage(input: { vault: VaultId; text: string }): Promise<{ runId: RunId }> {
     const runId = nextRunId();
     this.push({ type: "AgentStarted", runId, vault: input.vault });
-    // Phase 0: a chat turn is a query run. Real synthesis lands in Phase 1.
+    // A chat turn is a READ-ONLY query: route -> load -> synthesize. It never
+    // proposes or commits; the answer is surfaced via the event stream.
+    const outcome = await this.queryPipeline(input.vault, input.text, runId);
+    this.push({
+      type: "AgentEvent",
+      runId,
+      payload: {
+        kind: "answer",
+        answer: outcome.answer,
+        citedSlugs: outcome.citedSlugs,
+        routedPages: outcome.routedPages,
+        notInVault: outcome.notInVault,
+        usage: outcome.usage,
+      },
+    });
     return { runId };
+  }
+
+  /**
+   * READ-ONLY query (NOT part of CoreApi; the diagnostic/testable surface that
+   * sendMessage drives). Route via the memory-map, load the selected pages from
+   * durable truth, and ask the backend to answer ONLY from them with [[slug]]
+   * citations. Never writes truth, never proposes, never commits (invariant 1/2).
+   */
+  async answerQuestion(vault: VaultId, text: string): Promise<QueryOutcome> {
+    return this.queryPipeline(vault, text, nextRunId());
+  }
+
+  private async queryPipeline(vault: VaultId, text: string, runId: RunId): Promise<QueryOutcome> {
+    const v = this.vaultEntry(vault);
+
+    // Load durable truth once (traversal-safe reader), derive the map from it, and
+    // route. deriving here keeps query independent of any cached artifact (rebuild
+    // if absent, invariant 3).
+    const pages = await readPagesDir(v.info.path);
+    const map = buildMemoryMap(vault, pages);
+    const routedPages = routePages(map, text);
+
+    // Nothing relevant -> "not in this vault", with NO backend call (cheap + exact).
+    if (routedPages.length === 0) {
+      return { runId, answer: NOT_IN_VAULT, routedPages: [], citedSlugs: [], usage: { costUsd: 0 }, notInVault: true };
+    }
+
+    const selected = pages.filter((p) => routedPages.includes(p.slug));
+    const provider = this.provider();
+    if (!provider.runQuery) {
+      throw new Error(`Provider ${provider.id} cannot answer queries (no runQuery)`);
+    }
+
+    const instruction = buildQueryInstruction(text, selected);
+    // runQuery is read-only by contract: no workspace, no edit permission, no
+    // proposedChanges. The Host never turns its result into a proposal.
+    const result = await provider.runQuery({ runId, instruction });
+
+    // Citations = wikilinks in the answer intersected with the routed set, so a
+    // returned slug is ALWAYS a subset of what we actually injected.
+    const routedSet = new Set(routedPages);
+    const citedSlugs = [...new Set(extractWikilinks(result.answer))].filter((s) => routedSet.has(s));
+    const notInVault = result.answer.trim() === NOT_IN_VAULT || citedSlugs.length === 0;
+
+    return { runId, answer: result.answer, routedPages, citedSlugs, usage: result.usage, notInVault };
   }
 
   async ingestSource(input: IngestInput): Promise<{ proposalId?: ProposalId; rawCommit: string }> {

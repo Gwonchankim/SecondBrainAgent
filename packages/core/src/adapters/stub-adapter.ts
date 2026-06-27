@@ -3,7 +3,7 @@
 // without a real backend. Returns a fixed placeholder page. (Pulled out of
 // ClaudeCodeAdapter so that adapter can be the REAL headless implementation.)
 
-import { AgentProvider, AgentRunResult, AgentTask, AuthInput, AuthStatus, ProviderCapabilities } from "@mneme/provider";
+import { AgentProvider, AgentRunResult, AgentTask, AuthInput, AuthStatus, ProviderCapabilities, QueryResult, QueryTask } from "@mneme/provider";
 
 export class StubAdapter implements AgentProvider {
   readonly id = "stub";
@@ -47,6 +47,17 @@ export class StubAdapter implements AgentProvider {
       proposedChanges: [{ path: `raw/pages/placeholder-${input.runId}.md`, op: "create", content: page }],
       summary: "stub run (no model call)",
       citedSources: [],
+      usage: { costUsd: 0 },
+    };
+  }
+
+  // READ-ONLY query stub: deterministic, no model call. Returns no proposedChanges
+  // (the QueryResult type has none), proving a query never feeds the commit path.
+  async runQuery(input: QueryTask): Promise<QueryResult> {
+    return {
+      runId: input.runId,
+      status: "ok",
+      answer: "stub answer (no model call)",
       usage: { costUsd: 0 },
     };
   }

@@ -6,6 +6,7 @@
 //       and the read-only permission mode (no acceptEdits) of the billed probe.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as os from "node:os";
 import type { AuthStatus } from "@mneme/provider";
 
 const { probeCliMock, execFileMock } = vi.hoisted(() => ({
@@ -112,5 +113,48 @@ describe("ClaudeCodeAdapter.probeDelegated real branches (CLI seams mocked, offl
     const a = new ClaudeCodeAdapter();
     const r = await a.authenticate({ mode: "delegated" });
     expect(r.authenticated).toBe(false);
+  });
+});
+
+describe("ClaudeCodeAdapter.runQuery is structurally read-only (CLI seam mocked, offline)", () => {
+  beforeEach(() => {
+    execFileMock.mockReset();
+  });
+
+  it("runs in default (non-editing) mode in a temp dir, never acceptEdits, returns no proposedChanges", async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string, err: string) => void) => {
+        cb(null, JSON.stringify({ is_error: false, result: "Answer citing [[x]].", total_cost_usd: 0.01 }), "");
+      },
+    );
+    const a = new ClaudeCodeAdapter();
+    const res = await a.runQuery({ runId: "q1", instruction: "Question + injected pages" });
+
+    expect(res.status).toBe("ok");
+    expect(res.answer).toBe("Answer citing [[x]].");
+    expect(res.usage.costUsd).toBe(0.01);
+
+    const [, args, opts] = execFileMock.mock.calls[0] as [string, string[], { cwd: string }, unknown];
+    // Read-only: non-editing permission mode, NEVER acceptEdits.
+    const i = args.indexOf("--permission-mode");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(args[i + 1]).toBe("default");
+    expect(args).not.toContain("acceptEdits");
+    // Runs in a throwaway temp dir, NOT a vault working tree.
+    expect(opts.cwd).toBe(os.tmpdir());
+    // The result type carries no file changes at all.
+    expect("proposedChanges" in res).toBe(false);
+  });
+
+  it("maps a model error to status:error without throwing", async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (e: unknown, out: string, err: string) => void) => {
+        cb(null, JSON.stringify({ is_error: true, result: "boom" }), "");
+      },
+    );
+    const a = new ClaudeCodeAdapter();
+    const res = await a.runQuery({ runId: "q2", instruction: "Q" });
+    expect(res.status).toBe("error");
+    expect(res.error).toBe("boom");
   });
 });

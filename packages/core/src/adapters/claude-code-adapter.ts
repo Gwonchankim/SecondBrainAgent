@@ -27,6 +27,8 @@ import {
   AuthInput,
   AuthStatus,
   ProviderCapabilities,
+  QueryResult,
+  QueryTask,
 } from "@mneme/provider";
 import { probeCli } from "./cli-probe";
 import { captureChanges } from "./worktree-capture";
@@ -168,6 +170,41 @@ export class ClaudeCodeAdapter implements AgentProvider {
         usage: { costUsd: 0 },
         error: e instanceof Error ? e.message : String(e),
         warnings: ["runTask needs the `claude` CLI on PATH and a logged-in session"],
+      };
+    }
+  }
+
+  /**
+   * READ-ONLY query. Structurally cannot edit the vault:
+   *   - permission mode is "default" (NOT acceptEdits) — the model cannot write;
+   *   - it runs in os.tmpdir(), never the vault working tree (no `workspace` is
+   *     even passed in QueryTask), and it does NOT go through captureChanges, so
+   *     no proposedChanges can be produced;
+   *   - the return type (QueryResult) has no proposedChanges field at all.
+   * The whole answer context is injected inline by the Host, so no file access is
+   * needed. We capture only the model's text result + cost.
+   */
+  async runQuery(input: QueryTask): Promise<QueryResult> {
+    try {
+      const json = await runClaudeHeadless(input.instruction, {
+        maxTurns: 1,
+        permissionMode: "default",
+        timeoutMs: input.options?.timeoutMs,
+      })(os.tmpdir());
+      return {
+        runId: input.runId,
+        status: json.is_error ? "error" : "ok",
+        answer: json.result ?? "",
+        usage: { costUsd: json.total_cost_usd ?? 0 },
+        error: json.is_error ? json.result : undefined,
+      };
+    } catch (e) {
+      return {
+        runId: input.runId,
+        status: "error",
+        answer: "",
+        usage: { costUsd: 0 },
+        error: e instanceof Error ? e.message : String(e),
       };
     }
   }
