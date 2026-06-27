@@ -24,6 +24,8 @@ import { CredentialStore } from "@mneme/credential";
 import { CacheManager } from "@mneme/cache";
 import { resolveReflect } from "./policies";
 import { buildIngestInstruction, validateProposedPages, checkIngestPaths } from "./ingest";
+import { deriveMemoryMap } from "./memory";
+import type { MemoryMap } from "./memory";
 
 interface VaultEntry {
   info: VaultInfo;
@@ -219,6 +221,17 @@ export class MnemeCore implements CoreApi, CoreEventSource {
     // Phase 2: read the derived graph-index from .cache.
     this.vaultEntry(input.vault);
     return { vault: input.vault, nodes: [], edges: [] };
+  }
+
+  /**
+   * Accessor (NOT part of CoreApi): the vault's compact memory map, derived fresh
+   * from durable truth (raw/pages/). This is the read side the Host will later
+   * inject as ingest/query context — it is intentionally NOT yet called from
+   * ingestSource/sendMessage. Vault-internal: reads one vault root only.
+   */
+  async getMemoryMap(vault: VaultId): Promise<MemoryMap> {
+    const v = this.vaultEntry(vault);
+    return deriveMemoryMap(vault, v.info.path);
   }
 
   /**

@@ -10,8 +10,8 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { MnemeCore, ClaudeCodeAdapter, DEFAULT_PERSONAL_POLICY } from "@mneme/core";
-import { CacheManager, memoryMapDerivation, graphIndexDerivation, searchIndexDerivation } from "@mneme/cache";
+import { MnemeCore, ClaudeCodeAdapter, DEFAULT_PERSONAL_POLICY, memoryMapDerivation } from "@mneme/core";
+import { CacheManager, graphIndexDerivation, searchIndexDerivation } from "@mneme/cache";
 
 const SAMPLE =
   "Spaced repetition schedules reviews at increasing intervals to fight the " +

@@ -1,6 +1,7 @@
 export * from "./core";
 export * from "./policies";
 export * from "./ingest";
+export * from "./memory";
 export { ClaudeCodeAdapter } from "./adapters/claude-code-adapter";
 export { CodexAdapter } from "./adapters/codex-adapter";
 export { StubAdapter } from "./adapters/stub-adapter";

@@ -1,6 +1,7 @@
 // @mneme/cache — Phase 0 stub derivations.
-// Real builders (parse pages -> map/graph/search) land in Phase 1-2.
-// They exist now so the rebuild contract is exercisable end-to-end.
+// Real builders land incrementally: memory-map is now real (MemoryMapDerivation in
+// @mneme/core); graph-index / search-index remain stubs until Phase 2. They exist
+// so the rebuild contract is exercisable end-to-end.
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -20,6 +21,5 @@ function makeStub(name: string): Derivation {
   };
 }
 
-export const memoryMapDerivation = makeStub("memory-map");
 export const graphIndexDerivation = makeStub("graph-index");
 export const searchIndexDerivation = makeStub("search-index");

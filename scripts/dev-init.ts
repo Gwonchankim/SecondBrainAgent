@@ -6,8 +6,8 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import { MnemeCore, StubAdapter, DEFAULT_PERSONAL_POLICY } from "@mneme/core";
-import { CacheManager, memoryMapDerivation, graphIndexDerivation, searchIndexDerivation } from "@mneme/cache";
+import { MnemeCore, StubAdapter, DEFAULT_PERSONAL_POLICY, memoryMapDerivation } from "@mneme/core";
+import { CacheManager, graphIndexDerivation, searchIndexDerivation } from "@mneme/cache";
 
 async function main(): Promise<void> {
   const cache = new CacheManager()
